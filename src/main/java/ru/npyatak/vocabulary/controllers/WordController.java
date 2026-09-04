@@ -4,14 +4,29 @@ import java.time.LocalDate;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Controller;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseBody;
+import org.springframework.web.bind.annotation.RestController;
 
+import jakarta.validation.Valid;
+import ru.npyatak.vocabulary.dto.WordDTO;
+import ru.npyatak.vocabulary.dto.WordRequest;
+import ru.npyatak.vocabulary.exceptions.LanguageNotSupportedException;
+import ru.npyatak.vocabulary.exceptions.WordNotFoundException;
 import ru.npyatak.vocabulary.models.Training;
 import ru.npyatak.vocabulary.models.Word;
 import ru.npyatak.vocabulary.models.WordTrainingLink;
@@ -19,113 +34,120 @@ import ru.npyatak.vocabulary.services.TrainingService;
 import ru.npyatak.vocabulary.services.TrainingWordService;
 import ru.npyatak.vocabulary.services.WordService;
 
-/**
- *
- * @author npyatak
- * @since 04.10.2023
- */
-@Controller
+@RestController
+@RequestMapping("/api/words")
 public class WordController
 {
-    @Value("${language}")
-    private String language;
-    private final Map<String, WordService> wordServicesMap = new HashMap<>();
 
-    private final TrainingService trainingService;
-
-    private final TrainingWordService trainingWordService;
+    private final Map<String, WordService> wordServicesMap;
+    private final String defaultLanguage;
 
     @Autowired
-    public WordController(List<WordService> wordServices, TrainingService trainingService,
-            TrainingWordService trainingWordService)
+    public WordController(List<WordService> wordServices,
+            @Value("${language}") String defaultLanguage)
     {
-        this.trainingService = trainingService;
-        this.trainingWordService = trainingWordService;
-        wordServices.forEach(wordService -> this.wordServicesMap.put(wordService.getLanguage(), wordService));
+        this.defaultLanguage = defaultLanguage;
+        this.wordServicesMap = new HashMap<>();
+        wordServices.forEach(service ->
+                wordServicesMap.put(service.getLanguage(), service));
     }
 
-    @GetMapping("/allWords")
-    @ResponseBody
-    public List<Word> getAllWords()
+    /**
+     * Получить все слова
+     * GET /api/words?language=en
+     */
+    @GetMapping
+    public ResponseEntity<List<WordDTO>> getAllWords(@RequestParam(required = false) String language)
+            throws LanguageNotSupportedException
     {
-        WordService wordService = wordServicesMap.get(language);
-        return wordService.getAllWords();
+        String lang = language != null ? language : defaultLanguage;
+        WordService wordService = getWordService(lang);
+
+        List<WordDTO> words = wordService.getAllWords().stream()
+                .map(WordDTO::fromEntity)
+                .collect(Collectors.toList());
+
+        return ResponseEntity.ok(words);
     }
 
-    @GetMapping("/allTrainings")
-    @ResponseBody
-    public List<Training> getAllTrainings()
+    /**
+     * Добавить новое слово
+     * POST /api/words
+     */
+    @PostMapping
+    public ResponseEntity<WordDTO> addWord(@RequestBody @Valid WordRequest request) throws LanguageNotSupportedException
     {
-        return trainingService.getAllTrainings();
+        Word newWord = new Word(request.getWord(), request.getTranslation());
+        newWord.setLanguage(request.getLanguage() != null ?
+                request.getLanguage() : defaultLanguage);
+
+        WordService wordService = getWordService(newWord.getLanguage());
+        Word savedWord = wordService.saveWord(newWord);
+
+        return ResponseEntity
+                .status(HttpStatus.CREATED)
+                .body(WordDTO.fromEntity(savedWord));
     }
 
-    @GetMapping("/addWord/{word}/{translation}/{language}")
-    @ResponseBody
-    public List<Word> addWord(@PathVariable String word, @PathVariable String translation,
-            @PathVariable String language)
+    /**
+     * Получить слово по ID
+     * GET /api/words/{id}
+     */
+    @GetMapping("/{id}")
+    public ResponseEntity<WordDTO> getWord(@PathVariable Long id)
     {
-        Word newWord = new Word(word, translation);
-        newWord.setLanguage(language);
-        WordService wordService = wordServicesMap.get(language);
+        // Ищем слово во всех языках
+        for (WordService service : wordServicesMap.values())
+        {
+            Word word = service.getWordById(id);
+            return ResponseEntity.ok(WordDTO.fromEntity(word));
+        }
 
-        wordService.saveWord(newWord);
-        return getAllWords();
+        return ResponseEntity.notFound().build();
     }
 
-    @GetMapping("/addTraining/{training}")
-    @ResponseBody
-    public List<Training> addTraining(@PathVariable String training)
+    /**
+     * Обновить слово
+     * PUT /api/words/{id}
+     */
+    @PutMapping("/{id}")
+    public ResponseEntity<WordDTO> updateWord(
+            @PathVariable Long id,
+            @RequestBody @Valid WordRequest request) throws LanguageNotSupportedException
     {
-        trainingService.saveTraining(training);
-        return getAllTrainings();
+
+        WordService wordService = getWordService(request.getLanguage());
+        Word word = wordService.getWordById(id);
+
+        word.setWord(request.getWord());
+        word.setTranslation(request.getTranslation());
+        word.setLanguage(request.getLanguage());
+
+        Word updatedWord = wordService.saveWord(word);
+        return ResponseEntity.ok(WordDTO.fromEntity(updatedWord));
     }
 
-    @GetMapping("/addWordToTraining/{wordId}/{trainingId}")
-    @ResponseBody
-    public WordTrainingLink addWordToTraining(@PathVariable Long wordId, @PathVariable Long trainingId)
+    /**
+     * Удалить слово
+     * DELETE /api/words/{id}
+     */
+    @DeleteMapping("/{id}")
+    public ResponseEntity<Void> deleteWord(@PathVariable Long id)
     {
-        WordService wordService = wordServicesMap.get(language);
-        Word word = wordService.getWordById(wordId);
-        Training training = trainingService.getById(trainingId);
-        return trainingWordService.addWordToTraining(word, training);
+        for (WordService service : wordServicesMap.values())
+        {
+            service.deleteWord(id);
+        }
+        return ResponseEntity.noContent().build();
     }
 
-    @GetMapping("/addWordToTrainings/{wordId}")
-    @ResponseBody
-    public List<WordTrainingLink> addWordToAllTrainings(@PathVariable Long wordId)
+    private WordService getWordService(String language) throws LanguageNotSupportedException
     {
-        WordService wordService = wordServicesMap.get(language);
-        Word word = wordService.getWordById(wordId);
-        List<Training> training = trainingService.getAllTrainings();
-        return trainingWordService.addWordToAllTrainings(word, training);
+        WordService service = wordServicesMap.get(language);
+        if (service == null)
+        {
+            throw new LanguageNotSupportedException("Language not supported: " + language);
+        }
+        return service;
     }
-
-    @GetMapping("/getWordsByTrainingId/{trainingId}")
-    @ResponseBody
-    public List<Word> getWordsByTrainingId(@PathVariable Long trainingId)
-    {
-        List<Word> wordsByTrainingId = trainingWordService.getWordsByTrainingIdAndLanguage(trainingId, language);
-        return wordsByTrainingId;
-    }
-
-    @GetMapping("/getWordsForStudyByTrainingId/{trainingId}")
-    @ResponseBody
-    public List<Word> getWordsForStudyByTrainingId(@PathVariable Long trainingId)
-    {
-        LocalDate now = LocalDate.now();
-        List<Word> wordsByTrainingId = trainingWordService.getWordsForStudyForDate(now, 4L);
-        return wordsByTrainingId;
-    }
-
-    @GetMapping("/setWordByTrainingStatus/{wordId}/{trainingId}/{repeatDays}")
-    @ResponseBody
-    public List<WordTrainingLink> setWordByTrainingStatus(@PathVariable Long trainingId, @PathVariable Long wordId, @PathVariable int repeatDays)
-    {
-        WordService wordService = wordServicesMap.get(language);
-        Word word = wordService.getWordById(wordId);
-        Training training = trainingService.getById(trainingId);
-        LocalDate now = LocalDate.now();
-        return trainingWordService.addStudyStatus(word,training, now, repeatDays);
-    }
-
 }

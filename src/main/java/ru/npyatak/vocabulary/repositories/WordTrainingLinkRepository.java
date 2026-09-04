@@ -20,7 +20,7 @@ public interface WordTrainingLinkRepository extends CrudRepository<WordTrainingL
 {
     List<WordTrainingLink> findByTraining(Training training);
 
-    List<WordTrainingLink> findByWordAndTraining(Word word, Training training);
+    WordTrainingLink findByWordAndTraining(Word word, Training training);
 
     /*@Query("from WordTrainingLink a where a.lastStudyDate + a.repeatDays < :currentDate")
     public Iterable<WordTrainingLink> findByCategory(@Param("currentDate") Date currentDate);*/

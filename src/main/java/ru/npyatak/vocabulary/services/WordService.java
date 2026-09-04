@@ -15,7 +15,8 @@ public interface WordService
 
     Word getWordById(Long id);
 
-    void saveWord(Word word);
+    Word saveWord(Word word);
 
     String getLanguage();
+    void deleteWord(Long id);
 }

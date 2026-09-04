@@ -31,14 +31,21 @@ public abstract class AbstractWordService implements WordService
     }
 
     @Override
-    public void saveWord(Word word)
+    public Word saveWord(Word word)
     {
-        repository.save(word);
+        Word saved = repository.save(word);
+        return saved;
     }
 
     @Override
     public Word getWordById(Long id)
     {
         return repository.findById(id).get();
+    }
+
+    @Override
+    public void deleteWord(Long id)
+    {
+        repository.deleteById(id);
     }
 }

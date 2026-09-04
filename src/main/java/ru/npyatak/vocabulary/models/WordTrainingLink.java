@@ -110,4 +110,9 @@ public class WordTrainingLink
 
         return true;
     }
+
+    public Long getId()
+    {
+        return id;
+    }
 }

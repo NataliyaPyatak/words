@@ -26,10 +26,16 @@ public class TrainingService
         this.repository = repository;
     }
 
-    public void saveTraining(String trainingName)
+    public Training saveTraining(String trainingName)
     {
         Training training = new Training(trainingName);
-        repository.save(training);
+        Training saved = repository.save(training);
+        return saved;
+    }
+
+    public void deleteTraining(Long id)
+    {
+        repository.deleteById(id);
     }
 
     public Training getById(Long id)

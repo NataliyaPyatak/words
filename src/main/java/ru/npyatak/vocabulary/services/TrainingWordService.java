@@ -2,12 +2,16 @@ package ru.npyatak.vocabulary.services;
 
 import java.time.LocalDate;
 import java.util.Date;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
+import ru.npyatak.vocabulary.exceptions.LanguageNotSupportedException;
 import ru.npyatak.vocabulary.models.Training;
 import ru.npyatak.vocabulary.models.Word;
 import ru.npyatak.vocabulary.models.WordTrainingLink;
@@ -23,12 +27,29 @@ public class TrainingWordService
 {
     private final WordTrainingLinkRepository wordTrainingLinkRepository;
     private final TrainingService trainingService;
+    private final Map<String, WordService> wordServicesMap;
 
     @Autowired
-    public TrainingWordService(WordTrainingLinkRepository wordTrainingLinkRepository, TrainingService trainingService)
+    public TrainingWordService(WordTrainingLinkRepository wordTrainingLinkRepository,
+            TrainingService trainingService,
+            List<WordService> wordServices,
+            @Value("${language}") String defaultLanguage)
     {
         this.wordTrainingLinkRepository = wordTrainingLinkRepository;
         this.trainingService = trainingService;
+        this.wordServicesMap = new HashMap<>();
+        wordServices.forEach(service ->
+                wordServicesMap.put(service.getLanguage(), service));
+    }
+
+    public Training getTrainingById(Long trainingId)
+    {
+        return trainingService.getById(trainingId);
+    }
+
+    public List<Training> getAllTrainings()
+    {
+        return trainingService.getAllTrainings();
     }
 
     public WordTrainingLink addWordToTraining(Word word, Training training)
@@ -48,14 +69,20 @@ public class TrainingWordService
         return wordTrainingLinks;
     }
 
-    public List<WordTrainingLink> addStudyStatus(Word word, Training training, LocalDate lastStudyDate, int repeatDays)
+    public void removeWordFromTraining(Long wordId, Long trainingId, String language)
+            throws LanguageNotSupportedException
     {
-        List<WordTrainingLink> linkByWordAndTraining = wordTrainingLinkRepository.findByWordAndTraining(word, training);
-        linkByWordAndTraining.forEach(link ->
-        {
-                link.setRepeatDays(repeatDays);
-                link.setLastStudyDate(lastStudyDate);
-        });
+        WordTrainingLink link = wordTrainingLinkRepository
+                .findByWordAndTraining(getWordService(language).getWordById(wordId), trainingService.getById(trainingId));
+
+        wordTrainingLinkRepository.delete(link);
+    }
+
+    public WordTrainingLink addStudyStatus(Word word, Training training, LocalDate lastStudyDate, int repeatDays)
+    {
+        WordTrainingLink linkByWordAndTraining = wordTrainingLinkRepository.findByWordAndTraining(word, training);
+        linkByWordAndTraining.setRepeatDays(repeatDays);
+        linkByWordAndTraining.setLastStudyDate(lastStudyDate);
         return linkByWordAndTraining;
     }
 
@@ -64,7 +91,7 @@ public class TrainingWordService
         Training training = trainingService.getById(trainingId);
         List<WordTrainingLink> wordTrainingLinks = wordTrainingLinkRepository.findByTraining(training);
         List<Word> words = wordTrainingLinks.stream()
-                .filter(wtl ->wtl.getLastStudyDate() == null ||
+                .filter(wtl -> wtl.getLastStudyDate() == null ||
                         wtl.getLastStudyDate().plusDays(wtl.getRepeatDays()).isBefore(date))
                 .map(wtl -> wtl.getWord()).collect(Collectors.toList());
         return words;
@@ -93,6 +120,15 @@ public class TrainingWordService
         return wordTrainingLinks.stream().map(wtl -> wtl.getWord())
                 .filter(word -> word.getLanguage().equals(language))
                 .collect(Collectors.toList());
+    }
+
+    private WordService getWordService(String language) throws LanguageNotSupportedException
+    {
+        WordService service = wordServicesMap.get(language);
+        if (service == null) {
+            throw new LanguageNotSupportedException("Language not supported: " + language);
+        }
+        return service;
     }
 
     public List<Word> getEnglishWordsByTrainingId(Long trainingId)
