@@ -38,6 +38,16 @@ public class TrainingWordService
         return wordTrainingLink;
     }
 
+    public List<WordTrainingLink> addWordToAllTrainings(Word word, List<Training> trainings)
+    {
+        List<WordTrainingLink> wordTrainingLinks = trainings.stream()
+                .map(training -> new WordTrainingLink(word, training))
+                .collect(Collectors.toList());
+
+        wordTrainingLinkRepository.saveAll(wordTrainingLinks);
+        return wordTrainingLinks;
+    }
+
     public List<WordTrainingLink> addStudyStatus(Word word, Training training, LocalDate lastStudyDate, int repeatDays)
     {
         List<WordTrainingLink> linkByWordAndTraining = wordTrainingLinkRepository.findByWordAndTraining(word, training);

@@ -1,15 +1,12 @@
 package ru.npyatak.vocabulary.models;
 
 import java.time.LocalDate;
-import java.util.Date;
 import java.util.Objects;
 
-import javax.persistence.EmbeddedId;
-import javax.persistence.Entity;
-import javax.persistence.GeneratedValue;
-import javax.persistence.Id;
-import javax.persistence.ManyToOne;
-import javax.persistence.MapsId;
+import jakarta.persistence.Entity;
+import jakarta.persistence.GeneratedValue;
+import jakarta.persistence.Id;
+import jakarta.persistence.ManyToOne;
 
 /**
  *

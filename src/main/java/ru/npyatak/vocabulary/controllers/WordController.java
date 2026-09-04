@@ -90,6 +90,16 @@ public class WordController
         return trainingWordService.addWordToTraining(word, training);
     }
 
+    @GetMapping("/addWordToTrainings/{wordId}")
+    @ResponseBody
+    public List<WordTrainingLink> addWordToAllTrainings(@PathVariable Long wordId)
+    {
+        WordService wordService = wordServicesMap.get(language);
+        Word word = wordService.getWordById(wordId);
+        List<Training> training = trainingService.getAllTrainings();
+        return trainingWordService.addWordToAllTrainings(word, training);
+    }
+
     @GetMapping("/getWordsByTrainingId/{trainingId}")
     @ResponseBody
     public List<Word> getWordsByTrainingId(@PathVariable Long trainingId)
