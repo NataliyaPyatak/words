@@ -22,8 +22,9 @@ import org.springframework.web.client.RestTemplate;
  * @since 04.09.2026
  */
 @Service
-public class GoogleTTSService implements AudioSevice
+public class GoogleTTSService implements AudioService
 {
+
     private final RestTemplate restTemplate;
     private final Path audioCachePath;
 
@@ -44,6 +45,7 @@ public class GoogleTTSService implements AudioSevice
     /**
      * Получить аудио для слова
      */
+    @Override
     public byte[] getWordAudio(String word, String language)
     {
         // Проверяем кэш
@@ -104,10 +106,10 @@ public class GoogleTTSService implements AudioSevice
             String fileName = generateFileName(word, language);
             Path filePath = audioCachePath.resolve(fileName);
             Files.write(filePath, audioData);
+            System.out.println("Audio saved to cache: " + filePath.toAbsolutePath());
         }
         catch (IOException e)
         {
-            // Логируем, но не прерываем выполнение
             System.err.println("Failed to cache audio: " + e.getMessage());
         }
     }
@@ -124,6 +126,7 @@ public class GoogleTTSService implements AudioSevice
 
             if (Files.exists(filePath))
             {
+                System.out.println("Audio loaded from cache: " + filePath.toAbsolutePath());
                 return Optional.of(Files.readAllBytes(filePath));
             }
         }
